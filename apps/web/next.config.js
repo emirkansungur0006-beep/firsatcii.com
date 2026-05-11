@@ -3,7 +3,8 @@
 // API Proxy: /api/v1/* yolları NestJS'e (port 3500) yönlendirilir.
 // Bu sayede frontend ve backend aynı origin'de çalışıyor gibi görünür.
 
-const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3500';
+const isProd = process.env.NODE_ENV === 'production';
+const apiUrl = process.env.NEXT_PUBLIC_API_URL || (isProd ? 'https://firsatcii-com.onrender.com' : 'http://localhost:3500');
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
