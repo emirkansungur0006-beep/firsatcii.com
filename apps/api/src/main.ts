@@ -73,8 +73,8 @@ async function bootstrap() {
   // Tüm endpoint'ler /api/v1/ ile başlar
   app.setGlobalPrefix('api/v1');
 
-  const port = process.env.API_PORT || 3500;
-  await app.listen(port);
+  const port = process.env.PORT || process.env.API_PORT || 3500;
+  await app.listen(port, '0.0.0.0');
   
   console.log(`\n🚀 Fırsatçı API çalışıyor: http://localhost:${port}/api/v1`);
   console.log(`🔌 WebSocket: ws://localhost:${port}`);
