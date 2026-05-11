@@ -1,0 +1,484 @@
+// apps/api/prisma/schema.prisma
+// Fırsatçı uygulamasının tam veritabanı şeması.
+// PostgreSQL + PostGIS kullanılarak coğrafi sorgular desteklenir.
+// ORM: Prisma - SQL injection'a karşı koruma sağlar.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [postgis]
+}
+
+// =============================================
+// KULLANICI ROLLERİ
+// =============================================
+enum Role {
+  WORKER    // İşçi: hizmet veren, teklif gönderen taraf
+  EMPLOYER  // İşveren: iş açan, teklif değerlendiren taraf
+  ADMIN     // Yönetici: sistem yönetimi
+}
+
+// =============================================
+// KULLANICI PROFİL TİPLERİ
+// =============================================
+enum ProfileType {
+  INDIVIDUAL // Bireysel (TCKN bazlı)
+  CORPORATE  // Kurumsal (Vergi Numarası ve Firma isim bazlı)
+}
+
+// =============================================
+// İHALE DURUMLARI
+// =============================================
+enum JobStatus {
+  ACTIVE      // Aktif: teklif alınıyor
+  LOCKED      // Kilitli: son 10 dakika, yeni teklif yok (anti-sniper)
+  AWARDED     // Teklif kabul edildi, işçi/işveren süreci başlıyor
+  IN_PROGRESS // İş Başladı (İşveren onayladı)
+  FINISHED    // İşçi bitirdi (İşveren onayı bekliyor)
+  COMPLETED   // Tamamlandı: İşveren bitişi onayladı
+  CANCELLED   // İptal edildi
+}
+
+// =============================================
+// TEKLİF DURUMLARI
+// =============================================
+enum BidStatus {
+  PENDING    // Beklemede
+  ACCEPTED   // Kabul edildi (iletişim bilgileri açılır)
+  REJECTED   // Reddedildi
+  WITHDRAWN  // İşçi geri çekti
+}
+
+// =============================================
+// KULLANICI TABLOSU
+// =============================================
+model User {
+  id           String   @id @default(uuid())
+  
+  // Kişisel Bilgiler
+  firstName    String   // Ad
+  lastName     String   // Soyad
+  tcknEncrypted String  @unique // TCKN - AES-256-GCM ile şifrelenmiş
+  phoneEncrypted String @unique // Telefon - AES-256-GCM ile şifrelenmiş
+  email        String   @unique
+  passwordHash String   // bcrypt ile hash'lenmiş
+  profilePicture String? // Tüm kullanıcılar için profil fotoğrafı
+  
+  // Rol ve Durum
+  role         Role        @default(WORKER)
+  profileType  ProfileType @default(INDIVIDUAL)
+  isSuspended  Boolean     @default(false)
+  
+  // Kurumsal Müşteri/İşçi Alanları
+  companyName  String?
+  taxNumber    String?
+  
+  // Detaylı Profil Referansı (İşçi isen bu veri dolar)
+  workerProfile WorkerProfile?
+  
+  // Konum (İşçiler için hizmet bölgesi merkezi)
+  serviceArea  Unsupported("geometry(Point, 4326)")?
+  serviceRadius Int?    @default(10) // km cinsinden hizmet yarıçapı
+  
+  // Adres
+  cityId       Int?
+  districtId   Int?
+  city         City?     @relation(fields: [cityId], references: [id])
+  district     District? @relation(fields: [districtId], references: [id])
+  
+  // Performans Metrikleri
+  leaderScore  Float    @default(0)   // Liderlik puanı (0-100)
+  completedJobs Int     @default(0)   // Tamamlanan iş sayısı
+  
+  // İlişkiler
+  jobsPosted    Job[]          @relation("employer_jobs")
+  jobsWon       Job[]          @relation("won_jobs")
+  targetedJobs  Job[]          @relation("targeted_jobs")
+  bids          Bid[]
+  notifications Notification[]
+  refreshTokens RefreshToken[]
+  
+  // Mesajlaşma
+  sentMessages     Message[]   @relation("sent_messages")
+  receivedMessages Message[]   @relation("received_messages")
+  
+  // Yorumlar
+  reviewsGiven    Review[]       @relation("reviews_given")
+  reviewsReceived Review[]       @relation("reviews_received")
+  
+  auditLogsBy   AuditLog[]     @relation("admin_logs")
+  
+  // Gelişmiş Yetkilendirme (Modül Bazlı)
+  permissions  Json?    @default("{}") // Örn: { "canMessage": true, "canBid": true, "canPostJob": true }
+  
+  showRevenuePanel Boolean @default(true) // Admin tarafından kontrol edilebilir
+  
+  servicePackages ServicePackage[] @relation("worker_packages")
+  packageOrders   PackageOrder[]   @relation("employer_package_orders")
+  
+  subscription    UserSubscription?
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  isRevoked Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("refresh_tokens")
+}
+
+model WorkerProfile {
+  id             String   @id @default(uuid())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  profilePicture String?
+  aboutMe        String?  @db.Text
+  education      String?
+  jobHistory     Json?
+  references     Json?
+  experiences    Json?
+  
+  // Sektörler
+  sectors        Sector[]
+  sectorIds      Int[] // Geçmiş uyumluluk için tutulabilir veya Sector[] üzerinden yönetilir
+
+  university     String?
+  socialMedia    Json?    @default("{}")
+  skills         Json?    @default("[]")
+  portfolio      Json?    @default("[]")
+  
+  avgRating      Float?   @default(0)
+  reviewCount    Int?     @default(0)
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  @@map("worker_profiles")
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  jobId     String
+  job       Job      @relation(fields: [jobId], references: [id])
+  fromId    String
+  from      User     @relation("reviews_given", fields: [fromId], references: [id])
+  toId      String
+  to        User     @relation("reviews_received", fields: [toId], references: [id])
+  rating    Int      @default(5)
+  comment   String?  @db.Text
+  createdAt DateTime @default(now())
+
+  @@unique([jobId, fromId, toId])
+  @@map("reviews")
+}
+
+model City {
+  id        Int        @id @default(autoincrement())
+  name      String     @unique
+  plateCode Int        @unique
+  latitude  Float?
+  longitude Float?
+  districts District[]
+  users     User[]
+  jobs      Job[]
+  servicePackages ServicePackage[]
+
+  @@map("cities")
+}
+
+model District {
+  id            Int            @id @default(autoincrement())
+  name          String
+  cityId        Int
+  city          City           @relation(fields: [cityId], references: [id])
+  neighborhoods Neighborhood[]
+  users         User[]
+  jobs          Job[]
+  servicePackages ServicePackage[]
+
+  @@unique([name, cityId])
+  @@map("districts")
+}
+
+model Neighborhood {
+  id         Int      @id @default(autoincrement())
+  name       String
+  districtId Int
+  district   District @relation(fields: [districtId], references: [id])
+  jobs       Job[]
+
+  @@unique([name, districtId])
+  @@map("neighborhoods")
+}
+
+model Category {
+  id       Int        @id @default(autoincrement())
+  name     String
+  parentId Int?
+  parent   Category?  @relation("category_tree", fields: [parentId], references: [id])
+  children Category[] @relation("category_tree")
+  icon     String?
+  slug     String     @unique
+  jobs     Job[]
+  servicePackages ServicePackage[]
+
+  @@map("categories")
+}
+
+model Sector {
+  id          Int      @id @default(autoincrement())
+  code        String   @unique // NACE Kodu (Örn: 01.11)
+  name        String   // Sektör/Faaliyet Adı
+  level       Int      // 1 (Kısım), 2 (Bölüm), 3 (Grup), 4 (Sınıf), 5 (Alt Sınıf)
+  parentId    Int?
+  parent      Sector?  @relation("sector_hierarchy", fields: [parentId], references: [id])
+  children    Sector[] @relation("sector_hierarchy")
+  
+  jobs        Job[]
+  workerProfiles WorkerProfile[]
+  servicePackages ServicePackage[]
+
+  @@map("sectors")
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  content   String   @db.Text
+  
+  senderId  String
+  sender    User     @relation("sent_messages", fields: [senderId], references: [id])
+  
+  receiverId String
+  receiver  User     @relation("received_messages", fields: [receiverId], references: [id])
+  
+  jobId     String?
+  job       Job?     @relation(fields: [jobId], references: [id])
+  
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("messages")
+}
+
+model Job {
+  id          String    @id @default(uuid())
+  title       String
+  description String    @db.Text
+  
+  categoryId  Int
+  category    Category  @relation(fields: [categoryId], references: [id])
+  
+  sectorId    Int?
+  sector      Sector?   @relation(fields: [sectorId], references: [id])
+  
+  location    Unsupported("geometry(Point, 4326)")
+  address     String?
+  cityId      Int?
+  districtId  Int?
+  neighborhoodId Int?
+  city        City?          @relation(fields: [cityId], references: [id])
+  district    District?      @relation(fields: [districtId], references: [id])
+  neighborhood Neighborhood? @relation(fields: [neighborhoodId], references: [id])
+  
+  status               JobStatus @default(ACTIVE)
+  budgetMin            Decimal?  @db.Decimal(12, 2)
+  budgetMax            Decimal?  @db.Decimal(12, 2)
+  
+  publishDate          DateTime? @default(now())
+  auctionEnd           DateTime
+  workStartDate        DateTime?
+  isAntiSniperActive   Boolean   @default(false)
+  isFlash              Boolean   @default(false)
+  
+  employerId  String
+  employer    User      @relation("employer_jobs", fields: [employerId], references: [id])
+  
+  targetWorkerId String?
+  targetWorker   User?   @relation("targeted_jobs", fields: [targetWorkerId], references: [id])
+  
+  winnerId    String?
+  winner      User?     @relation("won_jobs", fields: [winnerId], references: [id])
+  
+  // İş Takip Akışı
+  actualStartDate      DateTime?
+  actualEndDate        DateTime?
+  totalDurationSeconds Int?
+  acceptedBidId        String?
+  
+  bids        Bid[]
+  notifications Notification[]
+  messages    Message[]
+  reviews     Review[]
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("jobs")
+}
+
+model Bid {
+  id       String    @id @default(uuid())
+  amount   Decimal   @db.Decimal(12, 2)
+  note     String?   @db.Text
+  status   BidStatus @default(PENDING)
+  updateCount Int      @default(1) // İhale başı teklif verme/güncelleme sayısı
+  jobId    String
+  job      Job       @relation(fields: [jobId], references: [id])
+  workerId String
+  worker   User      @relation(fields: [workerId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([jobId, workerId])
+  @@map("bids")
+}
+
+model Notification {
+  id       String   @id @default(uuid())
+  userId   String
+  user     User     @relation(fields: [userId], references: [id])
+  title    String
+  message  String
+  isRead   Boolean  @default(false)
+  type     String
+  jobId    String?
+  job      Job?     @relation(fields: [jobId], references: [id])
+  metadata Json?
+  createdAt DateTime @default(now())
+
+  @@map("notifications")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  adminId   String
+  admin     User     @relation("admin_logs", fields: [adminId], references: [id])
+  action    String
+  targetType String
+  targetId   String
+  details   Json?
+  ipAddress String
+  createdAt DateTime @default(now())
+
+  @@map("audit_logs")
+}
+
+// =============================================
+// HİZMET PAKETLERİ (ACİL USTA)
+// =============================================
+model ServicePackage {
+  id          String   @id @default(uuid())
+  title       String
+  description String?  @db.Text
+  price       Decimal  @db.Decimal(12, 2)
+  
+  workerId    String
+  worker      User     @relation("worker_packages", fields: [workerId], references: [id])
+  
+  sectorId    Int?
+  sector      Sector?   @relation(fields: [sectorId], references: [id])
+  
+  categoryId  Int?
+  category    Category? @relation(fields: [categoryId], references: [id])
+  
+  cityId      Int?
+  city        City?    @relation(fields: [cityId], references: [id])
+  districtId  Int?
+  district    District? @relation(fields: [districtId], references: [id])
+  
+  isActive    Boolean  @default(true)
+  
+  orders      PackageOrder[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("service_packages")
+}
+
+enum OrderStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CANCELLED
+  COMPLETED
+}
+
+model PackageOrder {
+  id               String      @id @default(uuid())
+  packageId        String
+  package          ServicePackage @relation(fields: [packageId], references: [id])
+  
+  employerId       String
+  employer         User        @relation("employer_package_orders", fields: [employerId], references: [id])
+  
+  status           OrderStatus @default(PENDING)
+  
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  @@map("package_orders")
+}
+
+// =============================================
+// ABONELİK SİSTEMİ
+// =============================================
+model SubscriptionPlan {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  price       Decimal  @db.Decimal(12, 2)
+  features    Json     // ["unlimited_bids", "priority_support", "no_ads"]
+  durationDays Int     @default(30)
+  isActive    Boolean  @default(true)
+  
+  subscriptions UserSubscription[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("subscription_plans")
+}
+
+model UserSubscription {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  planId    Int
+  plan      SubscriptionPlan @relation(fields: [planId], references: [id])
+  
+  startDate DateTime @default(now())
+  endDate   DateTime
+  isActive  Boolean  @default(true)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("user_subscriptions")
+}
+
+model Otp {
+  id        Int      @id @default(autoincrement())
+  phone     String   @unique
+  code      String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@map("otps")
+}

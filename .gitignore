@@ -1,0 +1,13 @@
+node_modules
+dist
+.next
+.turbo
+*.log
+.env
+.env.local
+.env.*.local
+*.zip
+*.docx
+*.xlsx
+*.csv
+create_database.sql

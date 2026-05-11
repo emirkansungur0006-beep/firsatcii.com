@@ -1,0 +1,3 @@
+Logo dosyasını buraya kopyalayın:
+C:\Users\EMİRKAN SUNGUR\Desktop\firsatci.com\FIRSATÇI LOGO.png
+→ C:\Users\EMİRKAN SUNGUR\Desktop\firsatci.com\apps\web\public\assets\logo.png
