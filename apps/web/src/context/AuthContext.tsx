@@ -22,6 +22,8 @@ interface User {
   completedJobs: number;
   cityId?: number;
   districtId?: number;
+  subscription?: any;
+  profilePicture?: string;
   permissions?: any;
 }
 

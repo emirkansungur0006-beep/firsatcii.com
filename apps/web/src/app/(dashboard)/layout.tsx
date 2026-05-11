@@ -10,7 +10,14 @@ import { useAuth } from '@/context/AuthContext';
 import NotificationHandler from '@/components/NotificationHandler';
 import Messenger from '@/components/Messenger';
 
-const WORKER_MENU = [
+interface MenuItem {
+  icon: string;
+  label: string;
+  href: string;
+  permission?: string;
+}
+
+const WORKER_MENU: MenuItem[] = [
   { icon: '🏠', label: 'Ana Sayfa', href: '/isci', permission: 'view_home' },
   { icon: '🔍', label: 'Aktif İhaleler', href: '/isci/ihaleler', permission: 'view_active_jobs' },
   { icon: '📋', label: 'Tekliflerim', href: '/isci/tekliflerim', permission: 'view_my_bids' },
@@ -21,7 +28,7 @@ const WORKER_MENU = [
   { icon: '💎', label: 'Üyelik İşlemleri', href: '/isci/uyelik' },
 ];
 
-const EMPLOYER_MENU = [
+const EMPLOYER_MENU: MenuItem[] = [
   { icon: '🏠', label: 'Ana Sayfa', href: '/isveren', permission: 'view_home' },
   { icon: '➕', label: 'İş Oluştur', href: '/isveren/is-olustur', permission: 'view_create_job' },
   { icon: '🚨', label: 'Acil Usta', href: '/isveren/acil-usta', permission: 'view_urgent_worker' },
@@ -32,7 +39,7 @@ const EMPLOYER_MENU = [
   { icon: '👤', label: 'Profilim', href: '/isveren/profil', permission: 'view_profile' },
 ];
 
-const ADMIN_MENU = [
+const ADMIN_MENU: MenuItem[] = [
   { icon: '📊', label: 'Genel Bakış', href: '/admin' },
   { icon: '👥', label: 'Kullanıcılar', href: '/admin/kullanicilar' },
   { icon: '🏗️', label: 'İhaleler', href: '/admin/ihaleler' },
@@ -126,7 +133,7 @@ export default function DashboardLayout({
     // Abonelik Kontrolü (Sadece İşçiler için)
     if (!isLoading && isAuthenticated && user?.role === 'WORKER') {
       const sub = user.subscription;
-      const isSubActive = sub && new Date(sub.endDate) > new Date() && sub.isActive;
+      const isSubActive = sub && sub.endDate && new Date(sub.endDate) > new Date() && sub.isActive;
       
       // Kısıtlı sayfalar listesi
       const restrictedPaths = ['/isci/ihaleler', '/isci/tekliflerim', '/isci/paketlerim'];
@@ -334,7 +341,7 @@ export default function DashboardLayout({
           
           {user.role === 'WORKER' && (
             <div style={{ marginTop: '8px' }}>
-              {user.subscription && new Date(user.subscription.endDate) > new Date() && user.subscription.isActive ? (
+              {user.subscription && user.subscription.plan && user.subscription.endDate && new Date(user.subscription.endDate) > new Date() && user.subscription.isActive ? (
                 <span className="badge badge-success" style={{ fontSize: '0.65rem' }}>💎 {user.subscription.plan.name}</span>
               ) : (
                 <span className="badge badge-danger" style={{ fontSize: '0.65rem' }}>⚠️ Abone Değil</span>
