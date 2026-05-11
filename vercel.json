@@ -1,0 +1,5 @@
+{
+  "buildCommand": "npx turbo run build --filter=@firsatci/web",
+  "outputDirectory": "apps/web/.next",
+  "installCommand": "npm install"
+}
