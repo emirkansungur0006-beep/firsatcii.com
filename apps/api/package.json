@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "ts-node -r tsconfig-paths/register src/main.ts",
     "build": "npm run db:generate && nest build",
-    "start": "node dist/apps/api/src/main.js",
+    "start": "node -e \"const { spawn } = require('child_process'); function run() { console.log('Basiyoruz...'); const p = spawn('node', ['dist/apps/api/src/main.js'], { stdio: 'inherit' }); p.on('exit', code => { if(code !== 0) { console.log('Veritabani uykuda (P1017). 15 saniye bekleyip tekrar denenecek...'); setTimeout(run, 15000); } }); } run();\"",
     "lint": "tsc --noEmit",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
