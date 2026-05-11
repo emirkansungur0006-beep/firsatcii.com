@@ -20,6 +20,8 @@ interface User {
   role: 'WORKER' | 'EMPLOYER' | 'ADMIN';
   leaderScore: number;
   completedJobs: number;
+  cityId?: number;
+  districtId?: number;
   permissions?: any;
 }
 
