@@ -3,7 +3,7 @@
 // Giriş sayfası - E-posta ve şifre ile giriş.
 
 import { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 

@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { formatCurrency, parseCurrency } from '@/utils/currency';
 
-export default function YeniIhalePage() {
+function IsOlusturContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
@@ -362,5 +362,13 @@ export default function YeniIhalePage() {
         </button>
       </form>
     </div>
+  );
+}
+
+export default function IsOlusturPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: '2rem', textAlign: 'center' }}>Yükleniyor...</div>}>
+      <IsOlusturContent />
+    </Suspense>
   );
 }

@@ -2,7 +2,7 @@
 // apps/web/src/app/(auth)/kayit/page.tsx
 // Kayıt sayfası - Rol seçimi, form doğrulama, kayıt.
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
@@ -22,7 +22,7 @@ interface FormData {
   taxNumber: string;
 }
 
-export default function KayitPage() {
+function KayitContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const defaultRole = searchParams.get('rol') === 'isveren' ? 'EMPLOYER' : 'WORKER';
@@ -350,5 +350,13 @@ export default function KayitPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function KayitPage() {
+  return (
+    <Suspense fallback={<div>Yükleniyor...</div>}>
+      <KayitContent />
+    </Suspense>
   );
 }
