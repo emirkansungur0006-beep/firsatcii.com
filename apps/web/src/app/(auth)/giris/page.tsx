@@ -134,10 +134,6 @@ export default function GirisPage() {
           </Link>
         </p>
 
-        {/* Admin Demo */}
-        <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'var(--color-gold-pale)', borderRadius: 'var(--radius-lg)', fontSize: '0.8rem' }}>
-          <strong>🔑 Test Admin:</strong> admin@firsatci.com / LLpp369*
-        </div>
       </div>
     </div>
   );
