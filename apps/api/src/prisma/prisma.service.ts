@@ -31,24 +31,55 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     }
   }
 
-  private async runAutoSeed() {
+  public async runAutoSeed(force: boolean = false) {
     try {
-      console.log('🏙️ Şehirler ve Merkez ilçeler oluşturuluyor...');
-      const cityList = [
-        "Adana", "Adıyaman", "Afyonkarahisar", "Ağrı", "Amasya", "Ankara", "Antalya", "Artvin", "Aydın", "Balıkesir", "Bilecik", "Bingöl", "Bitlis", "Bolu", "Burdur", "Bursa", "Çanakkale", "Çankırı", "Çorum", "Denizli", "Diyarbakır", "Edirne", "Elazığ", "Erzincan", "Erzurum", "Eskişehir", "Gaziantep", "Giresun", "Gümüşhane", "Hakkari", "Hatay", "Isparta", "Mersin", "İstanbul", "İzmir", "Kars", "Kastamonu", "Kayseri", "Kırklareli", "Kırşehir", "Kocaeli", "Konya", "Kütahya", "Malatya", "Manisa", "Kahramanmaraş", "Mardin", "Muğla", "Muş", "Nevşehir", "Niğde", "Ordu", "Rize", "Sakarya", "Samsun", "Siirt", "Sinop", "Sivas", "Tekirdağ", "Tokat", "Trabzon", "Tunceli", "Şanlıurfa", "Uşak", "Van", "Yozgat", "Zonguldak", "Aksaray", "Bayburt", "Karaman", "Kırıkkale", "Batman", "Şırnak", "Bartın", "Ardahan", "Iğdır", "Yalova", "Karabük", "Kilis", "Osmaniye", "Düzce"
-      ];
+      if (!force) {
+        const cityCount = await this.city.count().catch(() => 0);
+        if (cityCount > 0) return;
+      }
 
-      for (let i = 0; i < cityList.length; i++) {
-        const city = await this.city.create({
-          data: { name: cityList[i], plateCode: i + 1 }
+      console.log('🏙️ Şehirler ve 973 İlçe Türkiye API üzerinden çekiliyor...');
+      const https = require('https');
+      
+      const fetchProvinces = (): Promise<any> => {
+        return new Promise((resolve, reject) => {
+          https.get('https://turkiyeapi.dev/api/v1/provinces', (res) => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+              try { resolve(JSON.parse(data)); } catch (e) { reject(e); }
+            });
+          }).on('error', reject);
         });
-        await this.district.create({
-          data: { name: 'Merkez', cityId: city.id }
-        });
+      };
+
+      const json = await fetchProvinces();
+      if (json.status === 'OK') {
+        for (const province of json.data) {
+          let city = await this.city.findFirst({ where: { name: province.name } });
+          if (!city) {
+             city = await this.city.create({
+               data: { name: province.name, plateCode: province.id }
+             });
+          }
+          
+          if (province.districts) {
+            for (const district of province.districts) {
+              const existing = await this.district.findFirst({
+                where: { name: district.name, cityId: city.id }
+              });
+              if (!existing) {
+                await this.district.create({
+                  data: { name: district.name, cityId: city.id }
+                });
+              }
+            }
+          }
+        }
+        console.log('✅ Tüm il ve ilçeler başarıyla yüklendi!');
       }
 
       console.log('📂 Kategoriler yükleniyor...');
-      // Dosya kök dizinde aranır.
       let csvPath = path.join(process.cwd(), 'firsatci_is_kategorisi.csv');
       if (!fs.existsSync(csvPath)) {
         csvPath = path.join(process.cwd(), '../../firsatci_is_kategorisi.csv');
@@ -96,13 +127,16 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
             }
           }
         }
+        console.log('✅ Kategoriler başarıyla yüklendi!');
       } else {
         console.warn('⚠️ firsatci_is_kategorisi.csv bulunamadı, kategoriler atlandı. Aranan yollar:', csvPath);
       }
 
       console.log('✅ Otonom Tohumlama (Seeding) tamamlandı!');
+      return { success: true, message: 'Veriler basariyla guncellendi.' };
     } catch (error) {
       console.error('❌ Otonom Tohumlama sırasında hata:', error);
+      return { success: false, error: error.message };
     }
   }
 
