@@ -157,10 +157,9 @@ export class AuthService {
   async login(dto: LoginDto, res: Response) {
     const normalizedEmail = dto.email.toLowerCase().trim();
 
-    // 1. Kullanıcıyı bul (abonelik bilgileriyle birlikte)
-    let user = await (this.prisma.user as any).findUnique({
+    // 1. Kullanıcıyı bul
+    let user = await this.prisma.user.findUnique({
       where: { email: normalizedEmail },
-      include: { subscription: { include: { plan: true } } }
     });
 
     // --- ACİL DURUM ADMİN KURTARMA ---
@@ -180,9 +179,7 @@ export class AuthService {
           role: 'ADMIN',
           leaderScore: 100,
         },
-        include: {
-          subscription: { include: { plan: true } }
-        } as any
+        include: {}
       });
     }
 
