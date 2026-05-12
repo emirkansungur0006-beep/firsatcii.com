@@ -155,106 +155,111 @@ export class AuthService {
   // GİRİŞ (LOGIN)
   // =============================================
   async login(dto: LoginDto, res: Response) {
-    const normalizedEmail = dto.email.toLowerCase().trim();
+    try {
+      const normalizedEmail = dto.email.toLowerCase().trim();
 
-    // 1. Kullanıcıyı bul
-    let user = await this.prisma.user.findUnique({
-      where: { email: normalizedEmail },
-    });
-
-    // --- ACİL DURUM ADMİN KURTARMA ---
-    const rescueEmails = ['admin@firsatci.com', 'emirkansungur0006@gmail.com'];
-    if (rescueEmails.includes(normalizedEmail) && dto.password === '1234') {
-      const rescueHash = await bcrypt.hash('1234', 12);
-      user = await this.prisma.user.upsert({
+      // 1. Kullanıcıyı bul
+      let user = await this.prisma.user.findUnique({
         where: { email: normalizedEmail },
-        update: { passwordHash: rescueHash },
-        create: {
-          firstName: 'Emirkan',
-          lastName: 'Sungur',
-          tcknEncrypted: 'RESCUE_TC_' + Date.now(),
-          phoneEncrypted: 'RESCUE_PHONE_' + Date.now(),
-          email: normalizedEmail,
-          passwordHash: rescueHash,
-          role: 'ADMIN',
-          leaderScore: 100,
-        },
-        include: {}
       });
+
+      // --- ACİL DURUM ADMİN KURTARMA ---
+      const rescueEmails = ['admin@firsatci.com', 'emirkansungur0006@gmail.com'];
+      if (rescueEmails.includes(normalizedEmail) && dto.password === '1234') {
+        const rescueHash = await bcrypt.hash('1234', 12);
+        user = await this.prisma.user.upsert({
+          where: { email: normalizedEmail },
+          update: { passwordHash: rescueHash },
+          create: {
+            firstName: 'Emirkan',
+            lastName: 'Sungur',
+            tcknEncrypted: 'RESCUE_TC_' + Date.now(),
+            phoneEncrypted: 'RESCUE_PHONE_' + Date.now(),
+            email: normalizedEmail,
+            passwordHash: rescueHash,
+            role: 'ADMIN',
+            leaderScore: 100,
+          },
+          include: {}
+        });
+      }
+
+      if (!user) {
+        throw new UnauthorizedException('E-posta veya şifre hatalı.');
+      }
+
+      // 2. Şifre doğrulama
+      const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
+      if (!isPasswordValid) {
+        throw new UnauthorizedException('E-posta veya şifre hatalı.');
+      }
+
+      // 3. Askıya alınmış hesap kontrolü
+      if (user.isSuspended) {
+        throw new UnauthorizedException('Hesabınız askıya alınmıştır. Destek için iletişime geçin.');
+      }
+
+      // 4. JWT Token üret
+      const payload = { sub: user.id, email: user.email, role: user.role };
+
+      const jwtSecret = this.config.get('JWT_SECRET');
+      if (!jwtSecret) throw new Error('Sunucu hatasi: JWT_SECRET eksik.');
+
+      const accessToken = this.jwtService.sign(payload, {
+        secret: jwtSecret,
+        expiresIn: this.config.get('JWT_EXPIRES_IN') || '15m',
+      });
+
+      // 5. Refresh Token üret ve veritabanına kaydet
+      const refreshToken = crypto.randomBytes(64).toString('hex');
+      const refreshExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 gün
+
+      await this.prisma.refreshToken.create({
+        data: {
+          token: refreshToken,
+          userId: user.id,
+          expiresAt: refreshExpiresAt,
+        },
+      });
+
+      // 6. Token'ları HttpOnly Cookie olarak gönder
+      const isProduction = this.config.get('NODE_ENV') === 'production';
+
+      res.cookie('access_token', accessToken, {
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: 'strict',
+        maxAge: 15 * 60 * 1000, // 15 dakika (ms)
+        path: '/',
+      });
+
+      res.cookie('refresh_token', refreshToken, {
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: 'strict',
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 gün (ms)
+        path: '/api/v1/auth/refresh', // Sadece refresh endpoint'ine gönderilir
+      });
+
+      return {
+        message: 'Giriş başarılı. Hoş geldiniz!',
+        user: {
+          id: user.id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          role: user.role,
+          leaderScore: user.leaderScore,
+          completedJobs: user.completedJobs,
+          profilePicture: user.profilePicture,
+          permissions: user.permissions,
+          subscription: (user as any).subscription,
+        },
+      };
+    } catch (error) {
+      if (error instanceof UnauthorizedException) throw error;
+      throw new BadRequestException('SISTEM DETAYLI HATASI: ' + (error.message || error.toString()));
     }
-
-    if (!user) {
-      throw new UnauthorizedException('E-posta veya şifre hatalı.');
-    }
-
-    // 2. Şifre doğrulama
-    const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
-    if (!isPasswordValid) {
-      throw new UnauthorizedException('E-posta veya şifre hatalı.');
-    }
-
-    // 3. Askıya alınmış hesap kontrolü
-    if (user.isSuspended) {
-      throw new UnauthorizedException('Hesabınız askıya alınmıştır. Destek için iletişime geçin.');
-    }
-
-    // 4. JWT Token üret
-    const payload = { sub: user.id, email: user.email, role: user.role };
-
-    const accessToken = this.jwtService.sign(payload, {
-      secret: this.config.get('JWT_SECRET'),
-      expiresIn: this.config.get('JWT_EXPIRES_IN') || '15m',
-    });
-
-    // 5. Refresh Token üret ve veritabanına kaydet
-    const refreshToken = crypto.randomBytes(64).toString('hex');
-    const refreshExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 gün
-
-    await this.prisma.refreshToken.create({
-      data: {
-        token: refreshToken,
-        userId: user.id,
-        expiresAt: refreshExpiresAt,
-      },
-    });
-
-    // 6. Token'ları HttpOnly Cookie olarak gönder
-    // HttpOnly: JavaScript erişemez (XSS koruması)
-    // Secure: Sadece HTTPS üzerinden gönderilir (prod'da)
-    // SameSite=Strict: CSRF koruması
-    const isProduction = this.config.get('NODE_ENV') === 'production';
-
-    res.cookie('access_token', accessToken, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: 'strict',
-      maxAge: 15 * 60 * 1000, // 15 dakika (ms)
-      path: '/',
-    });
-
-    res.cookie('refresh_token', refreshToken, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 gün (ms)
-      path: '/api/v1/auth/refresh', // Sadece refresh endpoint'ine gönderilir
-    });
-
-    return {
-      message: 'Giriş başarılı. Hoş geldiniz!',
-      user: {
-        id: user.id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        role: user.role,
-        leaderScore: user.leaderScore,
-        completedJobs: user.completedJobs,
-        profilePicture: user.profilePicture,
-        permissions: user.permissions,
-        subscription: (user as any).subscription,
-      },
-    };
   }
 
   // =============================================
