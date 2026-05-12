@@ -97,7 +97,10 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
         for (const line of lines) {
           if (!line.trim() || line.startsWith('ANA_KATEGORI')) continue;
-          const parts = line.split(';');
+          
+          // Çoklu ayırıcı desteği: Noktalı virgül, Virgül, Tab veya Pipe
+          const parts = line.split(/[;,\t|]/);
+          
           if (parts.length >= 2) {
             const pName = fix(parts[0]);
             const cName = fix(parts[1]);

@@ -10,4 +10,5 @@ dist
 *.docx
 *.xlsx
 *.csv
+!firsatci_is_kategorisi.csv
 create_database.sql
