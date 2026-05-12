@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from '../context/AuthContext';
+import { SOCKET_URL, SOCKET_OPTIONS } from '../lib/socket';
 
 interface NotificationProviderProps {
   children: React.ReactNode;
@@ -41,14 +42,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
       return;
     }
 
-    // Dinamik bağlantı (Proxy üzerinden 2500 portunu kullan)
-    const wsUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:2500';
-    
-    socketRef.current = io(wsUrl, {
-      path: '/socket-proxy',
-      transports: ['polling', 'websocket'], // Polling öncelikli (Proxy uyumlu)
-      withCredentials: true,
-    });
+    socketRef.current = io(SOCKET_URL, SOCKET_OPTIONS);
 
     socketRef.current.on('connect', () => {
       console.log('✅ Real-time Notification Engine Connected!');

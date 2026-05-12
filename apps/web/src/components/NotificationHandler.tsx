@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from '@/context/AuthContext';
+import { SOCKET_URL, SOCKET_PATH } from '@/lib/socket';
 
 export default function NotificationHandler() {
   const { user } = useAuth();
@@ -157,11 +158,10 @@ export default function NotificationHandler() {
 
   useEffect(() => {
     if (!user) return;
-    const socketUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:2500';
-    const socketInstance = io(`${socketUrl}/auctions`, { 
-      path: '/socket-proxy',
+    const socketInstance = io(`${SOCKET_URL}/auctions`, { 
+      path: SOCKET_PATH,
       withCredentials: true, 
-      transports: ['polling', 'websocket'] // Polling öncelikli (Proxy uyumlu)
+      transports: ['polling', 'websocket']
     });
 
     socketInstance.on('connect', () => {

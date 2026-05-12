@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from '@/context/AuthContext';
+import { SOCKET_URL, SOCKET_OPTIONS } from '@/lib/socket';
 
 interface Message {
   id: string;
@@ -51,15 +52,11 @@ export default function Messenger() {
   useEffect(() => {
     if (!user) return;
 
-    const socketUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:2500';
-    
-    console.log('📡 Soket bağlantısı kuruluyor (Proxy-Safe):', socketUrl);
+    console.log('📡 Soket bağlantısı kuruluyor:', SOCKET_URL);
  
-    const socketInstance = io(socketUrl, {
-      path: '/socket-proxy',
+    const socketInstance = io(SOCKET_URL, {
+      ...SOCKET_OPTIONS,
       query: { userId: user.id },
-      transports: ['polling', 'websocket'],
-      withCredentials: true,
     });
 
     socketInstance.on('connect', () => {

@@ -58,27 +58,40 @@ async function apiFetch(url: string, options?: RequestInit) {
   return response.json();
 }
 
+// Sessiz auth kontrolü — 401 hatalarını konsola yazmaz
+async function silentAuthFetch(url: string, options?: RequestInit) {
+  try {
+    return await apiFetch(url, options);
+  } catch {
+    return null;
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // Sayfa yüklendiğinde mevcut oturumu kontrol et
   const refreshUser = useCallback(async () => {
-    try {
-      // Access token cookie'si geçerliyse kullanıcıyı getir
-      const data = await apiFetch('/api/v1/auth/me');
-      setUser(data.user);
-    } catch {
-      // Token geçersiz - refresh dene
-      try {
-        await apiFetch('/api/v1/auth/refresh', { method: 'POST' });
-        const data = await apiFetch('/api/v1/auth/me');
-        setUser(data.user);
-      } catch {
-        // Her ikisi de başarısız - oturum yok
-        setUser(null);
+    // İlk önce access token ile dene (sessizce)
+    const meData = await silentAuthFetch('/api/v1/auth/me');
+    if (meData?.user) {
+      setUser(meData.user);
+      return;
+    }
+
+    // Access token geçersiz — refresh token dene (sessizce)
+    const refreshResult = await silentAuthFetch('/api/v1/auth/refresh', { method: 'POST' });
+    if (refreshResult) {
+      const retryData = await silentAuthFetch('/api/v1/auth/me');
+      if (retryData?.user) {
+        setUser(retryData.user);
+        return;
       }
     }
+
+    // Her ikisi de başarısız — oturum yok
+    setUser(null);
   }, []);
 
   useEffect(() => {

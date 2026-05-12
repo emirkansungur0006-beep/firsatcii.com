@@ -29,7 +29,7 @@ export const metadata: Metadata = {
     siteName: 'Fırsatçı',
   },
   icons: {
-    icon: '/assets/favicon.ico',
+    icon: '/assets/logo.png',
     apple: '/assets/logo.png',
   },
 };

@@ -28,7 +28,13 @@ import { WsJwtGuard } from '../../common/guards/ws-jwt.guard';
 
 @WebSocketGateway({
   cors: {
-    origin: ['http://localhost:2500', 'http://127.0.0.1:2500'],
+    origin: [
+      'http://localhost:2500',
+      'http://127.0.0.1:2500',
+      'https://firsatcii.com',
+      'https://www.firsatcii.com',
+      process.env.CORS_ORIGIN || '',
+    ].filter(Boolean),
     credentials: true,
   },
   namespace: '/auctions',

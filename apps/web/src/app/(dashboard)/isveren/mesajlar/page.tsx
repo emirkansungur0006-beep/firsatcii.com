@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { io } from 'socket.io-client';
+import { SOCKET_URL, SOCKET_OPTIONS } from '@/lib/socket';
 
 export default function MesajlarPage() {
   const { user } = useAuth();
@@ -28,12 +29,9 @@ export default function MesajlarPage() {
       fetchChats();
 
       // Soket üzerinden anlık güncelleme
-      const socketUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:2500';
-      const socketInstance = io(socketUrl, {
-        path: '/socket-proxy',
+      const socketInstance = io(SOCKET_URL, {
+        ...SOCKET_OPTIONS,
         query: { userId: user.id },
-        transports: ['polling', 'websocket'],
-        withCredentials: true
       });
 
       socketInstance.on('new_message', () => {
