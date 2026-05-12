@@ -51,19 +51,25 @@ export default function IsciUyelikPage() {
   }
 
   const handleSubscribe = async (planId: number) => {
-    if (!confirm('Bu paketi satın almak istediğinize emin misiniz?')) return;
     setActionLoading(true);
     try {
       const res = await fetch(`/api/v1/subscriptions/subscribe/${planId}`, {
         method: 'POST',
         credentials: 'include'
       });
-      if (!res.ok) throw new Error('İşlem başarısız');
-      alert('Üyeliğiniz başarıyla aktif edildi!');
+      
+      const data = await res.json().catch(() => null);
+      
+      if (!res.ok) {
+        throw new Error(data?.message || 'İşlem başarısız (Sunucu Hatası)');
+      }
+      
+      alert('Üyeliğiniz başarıyla aktif edildi! Artık sistemin tüm özelliklerini kullanabilirsiniz.');
       await refreshUser();
-      fetchData();
-    } catch (err) {
-      alert('Satın alma işlemi başarısız oldu.');
+      await fetchData();
+    } catch (err: any) {
+      console.error('Satın alma hatası:', err);
+      alert('Satın alma işlemi başarısız oldu: ' + err.message);
     } finally {
       setActionLoading(false);
     }
