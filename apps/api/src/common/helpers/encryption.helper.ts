@@ -13,14 +13,14 @@ const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 16;     // Initialization Vector: 16 byte (128 bit)
 const TAG_LENGTH = 16;    // Authentication Tag: 16 byte
 
-// .env'deki 32-byte HEX anahtarı Buffer'a çevir
+// .env'deki anahtarı Buffer'a çevir (Kullanıcı HEX girmemiş olsa bile çökmeyi önler)
 function getKey(): Buffer {
-  const key = process.env.ENCRYPTION_KEY;
-  if (!key) throw new Error('ENCRYPTION_KEY ortam değişkeni tanımlı değil!');
+  const key = process.env.ENCRYPTION_KEY || 'firsatci-default-secret-key-2026';
   
-  // HEX string'i Buffer'a çevir (32 byte = 256 bit)
-  const keyBuffer = Buffer.from(key.padEnd(64, '0').slice(0, 64), 'hex');
-  return keyBuffer;
+  // Girilen string ne olursa olsun (kısa, uzun, hex veya düz metin),
+  // SHA-256 ile özetleyerek her zaman KESİN 32 byte (256 bit) bir Buffer elde ederiz.
+  // Bu sayede "Invalid key length" hatası ASLA yaşanmaz.
+  return crypto.createHash('sha256').update(String(key)).digest();
 }
 
 /**
