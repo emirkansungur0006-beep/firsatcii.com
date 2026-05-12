@@ -55,28 +55,28 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
       const json = await fetchProvinces();
       if (json.status === 'OK') {
+        let districtCount = 0;
         for (const province of json.data) {
-          let city = await this.city.findFirst({ where: { name: province.name } });
-          if (!city) {
-             city = await this.city.create({
-               data: { name: province.name, plateCode: province.id }
-             });
-          }
+          // İli benzersiz Plaka Kodu ile Prisma'dan buluyoruz
+          const city = await this.city.findUnique({ 
+            where: { plateCode: province.id } 
+          });
           
-          if (province.districts) {
-            for (const district of province.districts) {
-              const existing = await this.district.findFirst({
-                where: { name: district.name, cityId: city.id }
+          if (!city || !province.districts) continue;
+          
+          for (const district of province.districts) {
+            const existing = await this.district.findFirst({
+              where: { name: district.name, cityId: city.id }
+            });
+            if (!existing) {
+              await this.district.create({
+                data: { name: district.name, cityId: city.id }
               });
-              if (!existing) {
-                await this.district.create({
-                  data: { name: district.name, cityId: city.id }
-                });
-              }
+              districtCount++;
             }
           }
         }
-        console.log('✅ Tüm il ve ilçeler başarıyla yüklendi!');
+        console.log(`✅ ${districtCount} adet yeni ilçe başarıyla veritabanına eklendi!`);
       }
 
       console.log('📂 Kategoriler yükleniyor...');

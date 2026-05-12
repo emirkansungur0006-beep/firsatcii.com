@@ -60,7 +60,6 @@ export default function IhaleDetayPage() {
   };
 
   const handleStartJob = async () => {
-    if (!confirm('İşi başlatmak istediğinizi işverene bildirmek üzeresiniz?')) return;
     try {
       const res = await fetch(`/api/v1/jobs/${jobId}/start`, { method: 'POST', credentials: 'include' });
       if (!res.ok) throw new Error('İşlem başarısız');
@@ -70,7 +69,6 @@ export default function IhaleDetayPage() {
   };
 
   const handleFinishJob = async () => {
-    if (!confirm('İşi bitirdiğinizi onaylıyor musunuz?')) return;
     try {
       const res = await fetch(`/api/v1/jobs/${jobId}/finish`, { method: 'POST', credentials: 'include' });
       if (!res.ok) throw new Error('İşlem başarısız');

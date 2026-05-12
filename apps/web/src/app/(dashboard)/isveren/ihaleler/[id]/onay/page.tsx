@@ -56,7 +56,6 @@ export default function IhaleOnayPage() {
   useEffect(() => { fetchData(); }, [jobId]);
 
   const handleAcceptBid = async (bidId: string) => {
-    if (!confirm('Bu teklifi ve işçiyi onaylıyor musunuz?')) return;
     setActionLoading(true);
     try {
       const res = await fetch(`/api/v1/bids/${bidId}/accept`, {
@@ -72,7 +71,6 @@ export default function IhaleOnayPage() {
   };
 
   const handleConfirmStart = async () => {
-    if (!confirm('Ustanın işe başladığını onaylıyor musunuz?')) return;
     setActionLoading(true);
     try {
       const res = await fetch(`/api/v1/jobs/${jobId}/confirm-start`, { method: 'POST', credentials: 'include' });
@@ -83,7 +81,6 @@ export default function IhaleOnayPage() {
   };
 
   const handleConfirmFinish = async () => {
-    if (!confirm('İşin bittiğini onaylıyor musunuz?')) return;
     setActionLoading(true);
     try {
       const res = await fetch(`/api/v1/jobs/${jobId}/confirm-finish`, { method: 'POST', credentials: 'include' });
@@ -117,7 +114,6 @@ export default function IhaleOnayPage() {
   };
 
   const handleCancelJob = async () => {
-    if (!confirm('İhaleyi iptal etmek istediğinize emin misiniz?')) return;
     setActionLoading(true);
     try {
       const res = await fetch(`/api/v1/jobs/${jobId}`, { method: 'DELETE', credentials: 'include' });
@@ -129,7 +125,6 @@ export default function IhaleOnayPage() {
   };
 
   const handleRejectBid = async (bidId: string) => {
-    if (!confirm('Bu teklifi reddetmek istediğinize emin misiniz?')) return;
     setActionLoading(true);
     try {
       const res = await fetch(`/api/v1/bids/${bidId}/reject`, {

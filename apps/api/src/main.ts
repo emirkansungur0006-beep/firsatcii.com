@@ -19,15 +19,8 @@ import helmet from 'helmet';
 import { execSync } from 'child_process';
 
 async function bootstrap() {
-  console.log('Veritabani tablolari otomatik olarak olusturuluyor...');
-  try {
-    execSync('npx prisma db push --accept-data-loss', { stdio: 'inherit' });
-    console.log('Veritabani baslangic verileri (Kategoriler, Sehirler) yukleniyor...');
-    execSync('npm run db:seed', { stdio: 'inherit' });
-    console.log('Veritabani hazirligi TAMAMLANDI!');
-  } catch (error) {
-    console.error('Veritabani hazirlanirken bir hata olustu, yine de devam ediliyor:', error);
-  }
+  // Veritabanı tohumlaması artık otonom olarak PrismaService.onModuleInit içinde çalışıyor.
+  // Burada yapılan dış script çalıştırmaları tamamen kaldırıldı çünkü veritabanını sıfırlıyordu.
 
   const app = await NestFactory.create(AppModule);
 
