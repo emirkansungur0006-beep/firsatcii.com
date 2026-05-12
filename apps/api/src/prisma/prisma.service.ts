@@ -38,16 +38,26 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         if (cityCount > 0) return;
       }
 
-      console.log('🏙️ Şehirler ve 973 İlçe Türkiye API üzerinden çekiliyor...');
+      console.log('🏙️ Şehirler ve İlçe verileri güvenilir kaynaktan çekiliyor...');
       const https = require('https');
       
+      // Render sunucularını engelleyen turkiyeapi.dev yerine güvenilir Github Raw kullanıyoruz
       const fetchProvinces = (): Promise<any> => {
         return new Promise((resolve, reject) => {
-          https.get('https://turkiyeapi.dev/api/v1/provinces', (res) => {
+          https.get('https://raw.githubusercontent.com/volkansenturk/turkiye-iller-ilceler/master/iller_ilceler.json', (res) => {
             let data = '';
             res.on('data', chunk => data += chunk);
             res.on('end', () => {
-              try { resolve(JSON.parse(data)); } catch (e) { reject(e); }
+              try { 
+                const rawData = JSON.parse(data);
+                // Gelen veriyi eski sisteme uyumlu hale getir (Map)
+                const mappedData = rawData.map((il: any) => ({
+                   id: parseInt(il.plaka_kodu),
+                   name: il.il_adi.charAt(0) + il.il_adi.slice(1).toLowerCase(), // ADANA -> Adana
+                   districts: il.ilceler.map((ilce: any) => ({ name: ilce.ilce_adi.charAt(0) + ilce.ilce_adi.slice(1).toLowerCase() }))
+                }));
+                resolve({ status: 'OK', data: mappedData }); 
+              } catch (e) { reject(e); }
             });
           }).on('error', reject);
         });
@@ -62,7 +72,6 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
           });
 
           if (!city) {
-            // Şehir tamamen silinmişse güvenle geri ekle
             city = await this.city.create({
               data: { name: province.name, plateCode: province.id }
             });
@@ -71,12 +80,13 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
           if (!city || !province.districts) continue;
           
           for (const district of province.districts) {
+            const districtName = district.name;
             const existing = await this.district.findFirst({
-              where: { name: district.name, cityId: city.id }
+              where: { name: districtName, cityId: city.id }
             });
             if (!existing) {
               await this.district.create({
-                data: { name: district.name, cityId: city.id }
+                data: { name: districtName, cityId: city.id }
               });
               districtCount++;
             }
