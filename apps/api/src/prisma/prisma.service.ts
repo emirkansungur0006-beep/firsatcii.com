@@ -7,6 +7,7 @@ import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
+import { TURKIYE_ILLER_ILCELER } from './turkiye-ilceler';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
@@ -23,10 +24,10 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     await this.$connect();
     console.log('📦 PostgreSQL bağlantısı kuruldu.');
 
-    // Eğer veritabanı boşsa (Şehirler yoksa), otonom olarak doldur.
-    const cityCount = await this.city.count().catch(() => 0);
-    if (cityCount === 0) {
-      console.log('🌱 Veritabanı boş, yerleşik otonom tohumlama (seeding) başlatılıyor...');
+    // Eğer ilçe yoksa, otonom olarak doldur.
+    const districtCount = await this.district.count().catch(() => 0);
+    if (districtCount === 0) {
+      console.log('🌱 İlçeler eksik, yerleşik otonom tohumlama (seeding) başlatılıyor...');
       await this.runAutoSeed();
     }
   }
@@ -34,66 +35,38 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   public async runAutoSeed(force: boolean = false) {
     try {
       if (!force) {
-        const cityCount = await this.city.count().catch(() => 0);
-        if (cityCount > 0) return;
+        const districtCount = await this.district.count().catch(() => 0);
+        if (districtCount > 0) return;
       }
 
-      console.log('🏙️ Şehirler ve İlçe verileri güvenilir kaynaktan çekiliyor...');
-      const https = require('https');
+      // ============ İL VE İLÇE YÜKLEME (HARDCODED - HİÇBİR API'YE BAĞIMLI DEĞİL) ============
+      console.log('🏙️ 81 İl ve 973 İlçe yerleşik veriden yükleniyor (API bağımlılığı YOK)...');
       
-      // Render sunucularını engelleyen turkiyeapi.dev yerine güvenilir Github Raw kullanıyoruz
-      const fetchProvinces = (): Promise<any> => {
-        return new Promise((resolve, reject) => {
-          https.get('https://raw.githubusercontent.com/volkansenturk/turkiye-iller-ilceler/master/iller_ilceler.json', (res) => {
-            let data = '';
-            res.on('data', chunk => data += chunk);
-            res.on('end', () => {
-              try { 
-                const rawData = JSON.parse(data);
-                // Gelen veriyi eski sisteme uyumlu hale getir (Map)
-                const mappedData = rawData.map((il: any) => ({
-                   id: parseInt(il.plaka_kodu),
-                   name: il.il_adi.charAt(0) + il.il_adi.slice(1).toLowerCase(), // ADANA -> Adana
-                   districts: il.ilceler.map((ilce: any) => ({ name: ilce.ilce_adi.charAt(0) + ilce.ilce_adi.slice(1).toLowerCase() }))
-                }));
-                resolve({ status: 'OK', data: mappedData }); 
-              } catch (e) { reject(e); }
-            });
-          }).on('error', reject);
-        });
-      };
-
-      const json = await fetchProvinces();
-      if (json.status === 'OK') {
-        let districtCount = 0;
-        for (const province of json.data) {
-          let city = await this.city.findUnique({ 
-            where: { plateCode: province.id } 
+      let totalDistricts = 0;
+      for (const il of TURKIYE_ILLER_ILCELER) {
+        // İli bul veya oluştur
+        let city = await this.city.findUnique({ where: { plateCode: il.plateCode } });
+        if (!city) {
+          city = await this.city.create({
+            data: { name: il.name, plateCode: il.plateCode }
           });
+          console.log(`  + İl eklendi: ${il.name} (${il.plateCode})`);
+        }
 
-          if (!city) {
-            city = await this.city.create({
-              data: { name: province.name, plateCode: province.id }
+        // İlçeleri ekle
+        for (const districtName of il.districts) {
+          const existing = await this.district.findFirst({
+            where: { name: districtName, cityId: city.id }
+          });
+          if (!existing) {
+            await this.district.create({
+              data: { name: districtName, cityId: city.id }
             });
-          }
-          
-          if (!city || !province.districts) continue;
-          
-          for (const district of province.districts) {
-            const districtName = district.name;
-            const existing = await this.district.findFirst({
-              where: { name: districtName, cityId: city.id }
-            });
-            if (!existing) {
-              await this.district.create({
-                data: { name: districtName, cityId: city.id }
-              });
-              districtCount++;
-            }
+            totalDistricts++;
           }
         }
-        console.log(`✅ ${districtCount} adet yeni ilçe başarıyla veritabanına eklendi!`);
       }
+      console.log(`✅ ${totalDistricts} adet ilçe başarıyla veritabanına eklendi!`);
 
       console.log('📂 Kategoriler yükleniyor...');
       let csvPath = path.join(process.cwd(), 'firsatci_is_kategorisi.csv');
