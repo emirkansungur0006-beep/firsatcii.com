@@ -57,10 +57,16 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       if (json.status === 'OK') {
         let districtCount = 0;
         for (const province of json.data) {
-          // İli benzersiz Plaka Kodu ile Prisma'dan buluyoruz
-          const city = await this.city.findUnique({ 
+          let city = await this.city.findUnique({ 
             where: { plateCode: province.id } 
           });
+
+          if (!city) {
+            // Şehir tamamen silinmişse güvenle geri ekle
+            city = await this.city.create({
+              data: { name: province.name, plateCode: province.id }
+            });
+          }
           
           if (!city || !province.districts) continue;
           
