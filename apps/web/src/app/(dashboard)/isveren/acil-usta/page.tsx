@@ -10,10 +10,19 @@ export default function AcilUstaPage() {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [buyingId, setBuyingId] = useState<string | null>(null);
+  const [confirmPkg, setConfirmPkg] = useState<any | null>(null);
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
 
   useEffect(() => {
     fetchPackages();
   }, []);
+
+  useEffect(() => {
+    if (toast) {
+      const t = setTimeout(() => setToast(null), 4000);
+      return () => clearTimeout(t);
+    }
+  }, [toast]);
 
   const fetchPackages = async () => {
     try {
@@ -32,18 +41,22 @@ export default function AcilUstaPage() {
     }
   };
 
-  const handleBuy = async (pkg: any) => {
-    if (!confirm(`"${pkg.title}" hizmetini satın almak için ustaya istek göndermek istediğinize emin misiniz?`)) return;
+  const executeBuy = async (pkg: any) => {
     setBuyingId(pkg.id);
+    setConfirmPkg(null);
     try {
       const res = await fetch(`/api/v1/packages/${pkg.id}/buy`, {
         method: 'POST',
         credentials: 'include'
       });
-      if (!res.ok) throw new Error('İstek gönderilemedi.');
-      alert('Satın alma isteği ustaya iletildi! Usta onayladığında size bildirim gelecek ve mesajlar üzerinden görüşebileceksiniz.');
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || 'İstek gönderilemedi.');
+      }
+      setToast({ msg: '✅ Satın alma isteği ustaya iletildi! Usta onayladığında bildirim alacaksınız.', type: 'success' });
+      fetchPackages();
     } catch (err: any) {
-      alert(err.message);
+      setToast({ msg: `❌ ${err.message}`, type: 'error' });
     } finally {
       setBuyingId(null);
     }
@@ -113,8 +126,8 @@ export default function AcilUstaPage() {
 
                 <div style={{ display: 'flex', gap: '10px' }}>
                   <button 
-                    onClick={() => handleBuy(pkg)}
-                    disabled={buyingId === pkg.id}
+                    onClick={() => setConfirmPkg(pkg)}
+                    disabled={buyingId === pkg.id || confirmPkg?.id === pkg.id}
                     style={{ 
                       flex: 2, padding: '1.2rem', borderRadius: '16px', border: 'none', 
                       background: 'linear-gradient(135deg, var(--color-gold) 0%, #FF9800 100%)', 
@@ -247,6 +260,80 @@ export default function AcilUstaPage() {
           </table>
         </div>
       </section>
+
+      {/* ONAY MODALİ */}
+      {confirmPkg && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 9999, backdropFilter: 'blur(4px)'
+        }} onClick={() => setConfirmPkg(null)}>
+          <div style={{
+            background: '#fff', borderRadius: '24px', padding: '2.5rem',
+            maxWidth: '440px', width: '90%', textAlign: 'center',
+            boxShadow: '0 25px 50px rgba(0,0,0,0.25)',
+            animation: 'fadeInUp 0.3s ease'
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🛒</div>
+            <h3 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--color-navy)', marginBottom: '0.5rem' }}>
+              Satın Alma Onayı
+            </h3>
+            <p style={{ color: '#64748b', marginBottom: '0.5rem', lineHeight: 1.6 }}>
+              <strong style={{ color: '#1e293b' }}>"{confirmPkg.title}"</strong> hizmetini
+              <strong style={{ color: 'var(--color-gold)' }}> {formatCurrency(confirmPkg.price)}</strong> karşılığında
+              satın almak istediğinize emin misiniz?
+            </p>
+            <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: '2rem' }}>
+              Usta: {confirmPkg.worker?.firstName} {confirmPkg.worker?.lastName}
+            </p>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                onClick={() => setConfirmPkg(null)}
+                style={{
+                  flex: 1, padding: '1rem', borderRadius: '14px',
+                  border: '1px solid #e2e8f0', background: '#f8fafc',
+                  fontWeight: 700, fontSize: '1rem', cursor: 'pointer',
+                  color: '#64748b'
+                }}
+              >
+                İptal
+              </button>
+              <button
+                onClick={() => executeBuy(confirmPkg)}
+                style={{
+                  flex: 1, padding: '1rem', borderRadius: '14px', border: 'none',
+                  background: 'linear-gradient(135deg, var(--color-gold) 0%, #FF9800 100%)',
+                  color: 'var(--color-navy)', fontWeight: 900, fontSize: '1rem',
+                  cursor: 'pointer', boxShadow: '0 8px 20px rgba(255,152,0,0.4)'
+                }}
+              >
+                🚀 Onayla
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TOAST BİLDİRİMİ */}
+      {toast && (
+        <div style={{
+          position: 'fixed', top: '24px', right: '24px', zIndex: 10000,
+          background: toast.type === 'success' ? '#0f766e' : '#dc2626',
+          color: '#fff', padding: '1rem 1.5rem', borderRadius: '16px',
+          fontWeight: 700, fontSize: '0.95rem', maxWidth: '400px',
+          boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
+          animation: 'fadeInUp 0.3s ease'
+        }}>
+          {toast.msg}
+        </div>
+      )}
+
+      <style>{`
+        @keyframes fadeInUp {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
     </div>
   );
 }
