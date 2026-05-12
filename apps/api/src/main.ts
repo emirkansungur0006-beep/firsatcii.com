@@ -16,7 +16,19 @@ import * as cookieParser from 'cookie-parser';
 import * as express from 'express';
 import helmet from 'helmet';
 
+import { execSync } from 'child_process';
+
 async function bootstrap() {
+  console.log('Veritabani tablolari otomatik olarak olusturuluyor...');
+  try {
+    execSync('npx prisma db push --accept-data-loss --schema=apps/api/prisma/schema.prisma', { stdio: 'inherit' });
+    console.log('Veritabani baslangic verileri (Kategoriler, Sehirler) yukleniyor...');
+    execSync('npx ts-node apps/api/prisma/seed.ts', { stdio: 'inherit' });
+    console.log('Veritabani hazirligi TAMAMLANDI!');
+  } catch (error) {
+    console.error('Veritabani hazirlanirken bir hata olustu, yine de devam ediliyor:', error);
+  }
+
   const app = await NestFactory.create(AppModule);
 
   // --- GÜVENLİK: Helmet HTTP Header Koruması ---
